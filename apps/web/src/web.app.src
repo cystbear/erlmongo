@@ -1,0 +1,9 @@
+{application, web,
+ [
+  {description, "ErlMongo"},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [kernel, stdlib, bson, mongodb, kvs, n2o]},
+  {mod, { web_app, []}},
+  {env, []}
+ ]}.
