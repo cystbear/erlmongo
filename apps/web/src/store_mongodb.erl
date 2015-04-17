@@ -29,41 +29,35 @@ table(_Tab) -> #table{}.
 version() -> {version, "KVS MONGODB"}.
 
 % read ops
-get(Tab, Key) ->
-  Connection = get_connection(),
-  Collection = get_collection_name(Tab),
-  Id = get_id(Key),
-  Doc = mongo:find_one(Connection, Collection, Id),
-  case Doc of
-    {} -> {error, not_found};
-    _ -> {ok, Doc}
+get(Tab, {Key}) -> get(Tab, Key);
+get(Tab, Key) when is_binary(Key) -> mongo_get(Tab, Key).
+
+get(Tab, Key, Value) ->
+  Document = get(Tab, Key),
+  case Document of
+    {error, not_found} -> Value;
+    _ -> Document
   end.
 
-%%   {ok,
-%%     {
-%%       {
-%%         '_id', {<<85,37,71,234,203,12,25,240,82,161,182,78>>},
-%%         name, <<"Alex">>
-%%       }
-%%     }
-%%   },
-%%   {ok, Doc},
-  %%   Data = mongo:find_one(Connection, <<"users">>, {name, <<"Alex">>}),
-  %%   {'_id',{<<85,37,71,234,203,12,25,240,82,161,182,78>>}
-
-
-get(_Tab, _Key, _Value) -> {ok, document}.
-index(_Tab, _Key, _Value) -> [document, document].
+index(Tab, Key, Value) ->
+  Connection = get_connection(),
+  Collection = atom_to_binary(Tab, utf8),
+  Cursor = mongo:find(Connection, Collection, {Key, to_bin(Value)}),
+  Result = mc_cursor:rest(Cursor),
+  mc_cursor:close(Cursor),
+  Result.
 
 %% INTERNAL
+mongo_get(Tab, Key) ->
+  Connection = get_connection(),
+  Collection = atom_to_binary(Tab, utf8),
+  Document = mongo:find_one(Connection, Collection, {'_id', {Key}}),
+  case Document of
+    {} -> {error, not_found};
+    _ -> {ok, Document}
+  end.
+
 connect() ->
-%%   {DbName} = kvs:config(kvs, mongodb_settings),
-%%     ConnRes = mongo:connect(DbName),
-%%     case ConnRes of
-%%       {ok, Connection} -> save_connection(Connection), ok;
-%%       {error, Reason}  -> {error, Reason}
-%%     end.
-  %% {Db, User, Pass, Wmode, Rmode, Options} = {<<"test">>, <<>>, <<>>, slave_ok, unsafe, []},
   {DbName} = kvs:config(kvs, mongodb_settings),
   {ok, Connection} = mongo:connect(DbName),
   save_connection(Connection),
@@ -76,11 +70,5 @@ get_connection() ->
   [{conn_pid, Connection}|_] = ets:lookup(mongo_id_server, conn_pid),
   Connection.
 
-get_collection_name(RawCollName) when is_atom(RawCollName)   -> atom_to_binary(RawCollName, utf8);
-get_collection_name(RawCollName) when is_binary(RawCollName) -> RawCollName;
-get_collection_name(RawCollName) when is_list(RawCollName)   -> unicode:characters_to_binary(RawCollName);
-get_collection_name(RawCollName)                             -> RawCollName.
-
-get_id(RawId) when is_binary(RawId) -> {'_id', {RawId}};
-get_id({'_id', {_}} = RawId)        -> RawId;
-get_id(RawId)                       -> RawId.
+to_bin(Value) when is_list(Value) -> unicode:characters_to_binary(Value);
+to_bin(Value) -> Value.
